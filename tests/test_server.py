@@ -49,6 +49,13 @@ class ExecuteTests(unittest.TestCase):
         self.assertEqual("id", arguments[-1])
         self.assertEqual(12, run.call_args.kwargs["timeout"])
 
+    def test_disconnects_ssh_from_mcp_standard_input(self) -> None:
+        completed = subprocess.CompletedProcess(["ssh"], 0, "ok", "")
+        with patch("ssh_mcp.server.subprocess.run", return_value=completed) as run:
+            execute(SETTINGS, "server.example.com", "id")
+
+        self.assertEqual(subprocess.DEVNULL, run.call_args.kwargs["stdin"])
+
     def test_rejects_a_host_outside_the_allowlist(self) -> None:
         with patch("ssh_mcp.server.subprocess.run") as run:
             result = execute(SETTINGS, "other.example.com", "id")

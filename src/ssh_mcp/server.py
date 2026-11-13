@@ -164,6 +164,8 @@ def execute(settings: Settings, host: str, command: str, timeout_seconds: int | 
     try:
         result = subprocess.run(
             arguments,
+            # SSH must not consume the MCP server's JSON-RPC input stream.
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             errors="replace",
