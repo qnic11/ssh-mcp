@@ -51,12 +51,38 @@ Show the public key:
 Get-Content "$key.pub"
 ```
 
-Log into the target Linux machine as the account that MCP will use, then append that one-line public key to `~/.ssh/authorized_keys`. Do not replace existing entries.
+If the server is not provisioned, log into the target Linux machine with a privileged user and run these commands:
 
 ```bash
-install -d -m 700 ~/.ssh
-printf '%s\n' 'paste-the-public-key-here' >> ~/.ssh/authorized_keys
-chmod 600 ~/.ssh/authorized_keys
+# Create the dedicated SSH account.
+adduser --disabled-password --gecos "" codex
+
+# Authorize the Codex public key.
+install -d -m 700 -o codex -g codex /home/codex/.ssh
+
+cat > /home/codex/.ssh/authorized_keys <<'EOF'
+ssh-ed25519 REPLACE_WITH_CONTENTS_OF_CODEX_SSH_PUB codex-ssh User01
+EOF
+
+chown codex:codex /home/codex/.ssh/authorized_keys
+chmod 600 /home/codex/.ssh/authorized_keys
+
+# Grant passwordless root access.
+cat > /tmp/codex-sudoers <<'EOF'
+codex ALL=(ALL:ALL) NOPASSWD: ALL
+EOF
+
+visudo -cf /tmp/codex-sudoers &&
+  install -m 440 -o root -g root /tmp/codex-sudoers /etc/sudoers.d/codex &&
+  rm -f /tmp/codex-sudoers
+```
+
+If the server is already provisioned and the user `codex` already exists, you can simply add you key:
+
+```
+cat > /home/codex/.ssh/authorized_keys <<'EOF'
+ssh-ed25519 REPLACE_WITH_CONTENTS_OF_CODEX_SSH_PUB codex-ssh User01
+EOF
 ```
 
 ### 3. Add the MCP server in ChatGPT Desktop / Codex
