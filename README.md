@@ -33,9 +33,9 @@ If `git clone` fails after installation open a new terminal session.
 Keep the private key outside the repository. The MCP server runs OpenSSH in batch mode, so use a dedicated key **without a passphrase**; when `ssh-keygen` prompts for one, press Enter twice.
 
 ```powershell
-$key = 'C:\Users\ticqu\Documents\keys\freepbx17-lab_quarea_ed25519'
+$key = 'C:\Users\ticqu\Documents\keys\ssh-mcp_ed25519'
 
-ssh-keygen -t ed25519 -f $key -C 'quarea-ssh automation'
+ssh-keygen -t ed25519 -f $key -C 'ssh-mcp automation'
 ```
 
 Restrict access to the private key so that Windows OpenSSH will accept it:
@@ -75,7 +75,7 @@ Add these entries in the form's **Environment variables** section:
 | Key | Required | Example value |
 |---|---|---|
 | `SSH_MCP_USER` | Yes | `automation` |
-| `SSH_MCP_IDENTITY_FILE` | Yes | `C:\Users\ticqu\Documents\keys\freepbx17-lab_quarea_ed25519` |
+| `SSH_MCP_IDENTITY_FILE` | Yes | `C:\Users\ticqu\Documents\keys\ssh-mcp_ed25519` |
 | `SSH_MCP_DEFAULT_TIMEOUT` | No | `30` |
 | `SSH_MCP_ALLOWED_HOSTS` | No | `server-a.example.com,server-b.example.com` |
 | `SSH_MCP_KNOWN_HOSTS_FILE` | No | `C:\Users\you\.ssh\ssh_mcp_known_hosts` |
