@@ -20,8 +20,6 @@ py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install .
 ```
 
-Before this PR is merged, use `git clone --branch initial-ssh-mcp https://github.com/qnic11/ssh-mcp.git "$env:USERPROFILE\code\ssh-mcp"` instead.
-
 Keep the private key outside the repository, for example: `C:\Users\you\.ssh\ssh_mcp_ed25519`.
 
 ## Add it in ChatGPT Desktop / Codex
