@@ -1,98 +1,62 @@
 # ssh-mcp
 
-A minimal MCP server for Windows that exposes one tool, `run_ssh_command`. It runs a command on an allowlisted Linux host through the built-in OpenSSH client and returns `stdout`, `stderr`, and `exit_code`.
+A small Windows STDIO MCP server that runs commands on Linux hosts through OpenSSH and returns `stdout`, `stderr`, and `exit_code`. It has no web server or remote agent.
 
-The server uses MCP over STDIO only. It starts no web server and requires no remote agent.
+## Install on a new Windows PC
 
-## Requirements
-
-- Windows 10/11 with the **OpenSSH Client** optional feature installed (`ssh.exe` must be on `PATH`).
-- Python 3.10 or newer.
-- An SSH private key authorized for a least-privilege account on each target server.
-- A verified `known_hosts` file when strict host verification is required (recommended).
-
-## Install
+You need Python 3.10+, Git, an SSH private key authorized on the Linux host, and the Windows OpenSSH Client. In an Administrator PowerShell:
 
 ```powershell
-git clone https://github.com/qnic11/ssh-mcp.git
-Set-Location ssh-mcp
-py -3.10 -m venv .venv
+Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
+```
+
+Then install the project in a virtual environment:
+
+```powershell
+git clone https://github.com/qnic11/ssh-mcp.git "$env:USERPROFILE\code\ssh-mcp"
+Set-Location "$env:USERPROFILE\code\ssh-mcp"
+py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install .
 ```
 
-## Configure
+Before this PR is merged, clone its branch with `git clone --branch initial-ssh-mcp ...` instead.
 
-Create a dedicated key and configure its public key on the target Linux account. For strict host verification, obtain each server's host-key fingerprint through a trusted out-of-band channel, verify it, and save the corresponding public host-key entry in a dedicated `known_hosts` file.
+Keep the private key outside the repository, for example: `C:\Users\you\.ssh\ssh_mcp_ed25519`.
 
-Set the required variables in the environment that launches ChatGPT Desktop or Codex:
+## Add it in ChatGPT Desktop / Codex
 
-```powershell
-$env:SSH_MCP_USER = "automation"
-$env:SSH_MCP_IDENTITY_FILE = "C:\Users\you\.ssh\ssh_mcp_ed25519"
-$env:SSH_MCP_DEFAULT_TIMEOUT = "30"  # optional; 1 to 3600 seconds
-```
+Open **Settings → MCP servers → Add server** and choose **STDIO**.
 
-Optional restrictions:
+| Field | Value |
+|---|---|
+| Name | `ssh` |
+| Command to launch | `C:\Users\you\code\ssh-mcp\.venv\Scripts\python.exe` |
+| Arguments | Add `-m`, then `ssh_mcp.server` as two arguments |
+| Working directory | `C:\Users\you\code\ssh-mcp` |
 
-```powershell
-$env:SSH_MCP_ALLOWED_HOSTS = "server-a.example.com,server-b.example.com"
-$env:SSH_MCP_KNOWN_HOSTS_FILE = "C:\Users\you\.ssh\ssh_mcp_known_hosts"
-```
+Add these entries in the form's **Environment variables** section:
 
-When `SSH_MCP_ALLOWED_HOSTS` is unset, any syntactically valid host name or IP address is allowed. When `SSH_MCP_KNOWN_HOSTS_FILE` is set, the server uses strict host-key verification against that file. When it is unset, OpenSSH uses its default per-user `known_hosts` file and automatically accepts and records first-seen host keys (`StrictHostKeyChecking=accept-new`); changed keys are still rejected. `SSH_MCP_SSH_PATH` is optional when `ssh.exe` is on `PATH`; set it to an absolute path otherwise. The server always disables password and keyboard-interactive authentication and ignores normal SSH configuration files.
+| Key | Required | Example value |
+|---|---|---|
+| `SSH_MCP_USER` | Yes | `automation` |
+| `SSH_MCP_IDENTITY_FILE` | Yes | `C:\Users\you\.ssh\ssh_mcp_ed25519` |
+| `SSH_MCP_DEFAULT_TIMEOUT` | No | `30` |
+| `SSH_MCP_ALLOWED_HOSTS` | No | `server-a.example.com,server-b.example.com` |
+| `SSH_MCP_KNOWN_HOSTS_FILE` | No | `C:\Users\you\.ssh\ssh_mcp_known_hosts` |
 
-## ChatGPT Desktop / Codex configuration
+Do not use **Environment variable passthrough** for these entries. Restart ChatGPT Desktop/Codex after saving. [Official MCP setup documentation](https://learn.chatgpt.com/docs/extend/mcp).
 
-In ChatGPT Desktop or the Codex IDE extension, go to **Settings → MCP servers → Add server**, choose **STDIO**, and use:
+## Optional host controls
 
-- Command: `C:\path\to\ssh-mcp\.venv\Scripts\python.exe`
-- Arguments: `-m ssh_mcp.server`
-- Working directory: `C:\path\to\ssh-mcp`
+- With `SSH_MCP_ALLOWED_HOSTS`, only listed hosts are allowed. Without it, any valid host name or IP address is allowed.
+- With `SSH_MCP_KNOWN_HOSTS_FILE`, host keys are checked strictly against that file. Without it, OpenSSH accepts and records a first-seen host key automatically; a changed key still fails.
 
-Restart after saving. The [official MCP documentation](https://learn.chatgpt.com/docs/extend/mcp) confirms that ChatGPT Desktop, Codex CLI, and the IDE extension share this local configuration and support STDIO commands with environment variables.
+## Security
 
-Equivalent `~/.codex/config.toml` configuration:
-
-```toml
-[mcp_servers.ssh]
-command = "C:\\path\\to\\ssh-mcp\\.venv\\Scripts\\python.exe"
-args = ["-m", "ssh_mcp.server"]
-cwd = "C:\\path\\to\\ssh-mcp"
-env_vars = [
-  "SSH_MCP_USER",
-  "SSH_MCP_IDENTITY_FILE",
-  "SSH_MCP_DEFAULT_TIMEOUT",
-]
-default_tools_approval_mode = "prompt"
-tool_timeout_sec = 3605
-```
-
-The client timeout is intentionally slightly higher than the server's maximum command timeout so the server can return its timeout result.
-
-## Tool
-
-`run_ssh_command(host, command, timeout_seconds=None)` accepts only a configured host. `timeout_seconds` defaults to `SSH_MCP_DEFAULT_TIMEOUT` and is limited to 1–3600 seconds.
-
-Example result:
-
-```json
-{
-  "stdout": "Linux server-a 6.8.0\n",
-  "stderr": "",
-  "exit_code": 0
-}
-```
-
-Exit code `124` means the local timeout expired; `126` means invalid tool input; `255` means the SSH client could not be started.
-
-## Security notes
-
-- Treat this as privileged command-execution access. Use a dedicated Linux account with the smallest practical permissions; do not use `root`.
-- Keep the private key outside the repository, protected by Windows ACLs and, where workable for noninteractive use, a secure credential/agent workflow.
-- Set `SSH_MCP_ALLOWED_HOSTS` to keep the host scope narrow. Without it, the tool can connect to any valid host name or IP address.
-- Set `SSH_MCP_KNOWN_HOSTS_FILE` for strict host verification. Without it, a first connection trusts the key presented at that time; verify hosts out-of-band where possible. Changed host keys still fail.
-- Secrets printed by remote commands become MCP tool output. Avoid commands that expose credentials and keep tool approval enabled.
+- Use a dedicated non-root Linux account with minimal permissions.
+- Restrict hosts and provide a verified `known_hosts` file when possible.
+- Commands and their output can expose secrets; keep MCP tool approval enabled.
 
 ## Test
 
