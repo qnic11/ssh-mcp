@@ -27,9 +27,9 @@ class ConfigurationError(ValueError):
 class Settings:
     ssh_path: str
     user: str
-    allowed_hosts: frozenset[str]
+    allowed_hosts: frozenset[str] | None
     identity_file: Path
-    known_hosts_file: Path
+    known_hosts_file: Path | None
     default_timeout_seconds: int
 
 
@@ -65,11 +65,12 @@ def load_settings() -> Settings:
     if not USER_PATTERN.fullmatch(user):
         raise ConfigurationError("SSH_MCP_USER contains unsupported characters")
 
-    allowed_hosts = frozenset(
-        host.strip() for host in _required_env("SSH_MCP_ALLOWED_HOSTS").split(",") if host.strip()
-    )
-    if not allowed_hosts or any(not NAME_PATTERN.fullmatch(host) for host in allowed_hosts):
-        raise ConfigurationError("SSH_MCP_ALLOWED_HOSTS must be a comma-separated list of host names or IPs")
+    allowed_hosts_value = os.environ.get("SSH_MCP_ALLOWED_HOSTS", "").strip()
+    allowed_hosts = None
+    if allowed_hosts_value:
+        allowed_hosts = frozenset(host.strip() for host in allowed_hosts_value.split(",") if host.strip())
+        if not allowed_hosts or any(not NAME_PATTERN.fullmatch(host) for host in allowed_hosts):
+            raise ConfigurationError("SSH_MCP_ALLOWED_HOSTS must be a comma-separated list of host names or IPs")
 
     configured_ssh = os.environ.get("SSH_MCP_SSH_PATH", "ssh.exe")
     ssh_path = shutil.which(configured_ssh) or configured_ssh
@@ -81,7 +82,11 @@ def load_settings() -> Settings:
         user=user,
         allowed_hosts=allowed_hosts,
         identity_file=_existing_file("SSH_MCP_IDENTITY_FILE"),
-        known_hosts_file=_existing_file("SSH_MCP_KNOWN_HOSTS_FILE"),
+        known_hosts_file=(
+            _existing_file("SSH_MCP_KNOWN_HOSTS_FILE")
+            if os.environ.get("SSH_MCP_KNOWN_HOSTS_FILE", "").strip()
+            else None
+        ),
         default_timeout_seconds=_parse_timeout(
             os.environ.get("SSH_MCP_DEFAULT_TIMEOUT", str(DEFAULT_TIMEOUT_SECONDS)),
             "SSH_MCP_DEFAULT_TIMEOUT",
@@ -105,7 +110,19 @@ def _as_text(value: str | bytes | None) -> str:
 
 
 def _ssh_arguments(settings: Settings, host: str, command: str, timeout: int) -> list[str]:
-    return [
+    host_verification = (
+        [
+            "-o",
+            "StrictHostKeyChecking=yes",
+            "-o",
+            f"UserKnownHostsFile={settings.known_hosts_file}",
+            "-o",
+            "GlobalKnownHostsFile=NUL",
+        ]
+        if settings.known_hosts_file is not None
+        else ["-o", "StrictHostKeyChecking=accept-new"]
+    )
+    arguments = [
         settings.ssh_path,
         "-F",
         "none",
@@ -120,22 +137,18 @@ def _ssh_arguments(settings: Settings, host: str, command: str, timeout: int) ->
         "PasswordAuthentication=no",
         "-o",
         "KbdInteractiveAuthentication=no",
-        "-o",
-        "StrictHostKeyChecking=yes",
-        "-o",
-        f"UserKnownHostsFile={settings.known_hosts_file}",
-        "-o",
-        "GlobalKnownHostsFile=NUL",
+        *host_verification,
         "-o",
         f"ConnectTimeout={timeout}",
         f"{settings.user}@{host}",
         command,
     ]
+    return arguments
 
 
 def execute(settings: Settings, host: str, command: str, timeout_seconds: int | None = None) -> dict[str, Any]:
     """Run one command without a local shell and return its remote process result."""
-    if host not in settings.allowed_hosts:
+    if settings.allowed_hosts is not None and host not in settings.allowed_hosts:
         return {"stdout": "", "stderr": f"Host is not allowed: {host}", "exit_code": 126}
     if not NAME_PATTERN.fullmatch(host):
         return {"stdout": "", "stderr": "Host contains unsupported characters", "exit_code": 126}
