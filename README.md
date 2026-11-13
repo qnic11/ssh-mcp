@@ -13,6 +13,7 @@ Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
 Then install the project in a virtual environment:
 
 ```powershell
+winget install --id Git.Git -e
 git clone https://github.com/qnic11/ssh-mcp.git "$env:USERPROFILE\code\ssh-mcp"
 Set-Location "$env:USERPROFILE\code\ssh-mcp"
 py -m venv .venv
